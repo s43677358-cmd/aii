@@ -198,28 +198,25 @@ class FairnessAuditor:
         start_time = datetime.now()
         
         try:
-            # Identify sensitive attributes (proxy detection)
             sensitive_keywords = ['age', 'gender', 'race', 'ethnicity', 'religion', 'nationality']
             sensitive_cols = [col for col in df.columns if any(kw in col.lower() for kw in sensitive_keywords)]
             
             fairness_issues = []
             fairness_score = 100
             
-            # Check for class imbalance in sensitive attributes
             for col in sensitive_cols:
                 if df[col].dtype == 'object' or df[col].nunique() < 20:
                     value_counts = df[col].value_counts()
                     imbalance_ratio = value_counts.max() / value_counts.min() if value_counts.min() > 0 else float('inf')
                     
-                    if imbalance_ratio > 3:  # Significant imbalance
+                    if imbalance_ratio > 3:
                         fairness_issues.append(f"Imbalance in {col}: {imbalance_ratio:.2f}x")
                         fairness_score -= 15
             
-            # Check for demographic parity potential
             if len(sensitive_cols) > 0:
-                fairness_score = max(50, fairness_score)  # At least some concerns
+                fairness_score = max(50, fairness_score)
             else:
-                fairness_score = 95  # No sensitive attributes detected
+                fairness_score = 95
             
             details = {
                 "sensitive_columns_detected": sensitive_cols,
@@ -228,7 +225,6 @@ class FairnessAuditor:
             }
             
             duration = (datetime.now() - start_time).total_seconds()
-            
             status = StageStatus.PASSED if fairness_score >= 70 else StageStatus.WARNING
             
             return StageResult(
@@ -262,7 +258,6 @@ class PrivacyScanner:
             privacy_risks = []
             privacy_score = 100
             
-            # Check for PII (Personally Identifiable Information)
             pii_keywords = ['email', 'phone', 'ssn', 'id', 'address', 'name', 'password', 'token']
             pii_cols = [col for col in df.columns if any(kw in col.lower() for kw in pii_keywords)]
             
@@ -270,21 +265,13 @@ class PrivacyScanner:
                 privacy_risks.append(f"Potential PII detected in columns: {pii_cols}")
                 privacy_score -= 30
             
-            # Check for unique identifiers
             for col in df.columns:
                 unique_ratio = df[col].nunique() / len(df)
                 if unique_ratio > 0.95 and df[col].dtype == 'object':
                     privacy_risks.append(f"Column '{col}' appears to be unique identifier (anonymization needed)")
                     privacy_score -= 20
             
-            # Check for high cardinality numeric IDs
-            numeric_cols = df.select_dtypes(include=[np.number]).columns
-            for col in numeric_cols:
-                if df[col].nunique() > len(df) * 0.8 and col.lower() in ['id', 'user_id', 'customer_id']:
-                    privacy_risks.append(f"Column '{col}' may contain individual identifiers")
-                    privacy_score -= 15
-            
-            privacy_score = max(50, privacy_score)  # Minimum score
+            privacy_score = max(50, privacy_score)
             
             details = {
                 "pii_columns": pii_cols,
@@ -293,7 +280,6 @@ class PrivacyScanner:
             }
             
             duration = (datetime.now() - start_time).total_seconds()
-            
             status = StageStatus.PASSED if privacy_score >= 80 else StageStatus.WARNING
             
             return StageResult(
@@ -334,18 +320,15 @@ class ExplainabilityAnalyzer:
                 "observations": []
             }
             
-            # Check for high dimensionality
             if len(df.columns) > 50:
                 details["observations"].append("High dimensionality (>50 features) - may reduce interpretability")
                 explainability_score -= 10
             
-            # Check for informative column names
             short_names = sum(1 for col in df.columns if len(col) < 3)
-            if short_names / len(df.columns) > 0.3:
+            if len(df.columns) > 0 and short_names / len(df.columns) > 0.3:
                 details["observations"].append("Many columns have very short names - consider more descriptive naming")
                 explainability_score -= 5
             
-            # Assess feature variety
             if details["feature_types"]["numeric"] > 0 and details["feature_types"]["categorical"] > 0:
                 details["observations"].append("Good mix of numeric and categorical features")
                 explainability_score = min(100, explainability_score + 5)
@@ -353,7 +336,6 @@ class ExplainabilityAnalyzer:
             details["recommendation"] = "Dataset appears interpretable" if explainability_score >= 80 else "Consider feature engineering and documentation"
             
             duration = (datetime.now() - start_time).total_seconds()
-            
             status = StageStatus.PASSED if explainability_score >= 75 else StageStatus.WARNING
             
             return StageResult(
@@ -384,7 +366,6 @@ class RiskAssessor:
         start_time = datetime.now()
         
         try:
-            # Aggregate risks from all stages
             risks = []
             aggregated_score = 0
             weights = {}
@@ -409,7 +390,6 @@ class RiskAssessor:
                 
                 aggregated_score += result.score * weights.get(result.stage, 0.1)
             
-            # Risk level classification
             if aggregated_score >= 85:
                 risk_level = "LOW"
             elif aggregated_score >= 70:
@@ -425,7 +405,6 @@ class RiskAssessor:
             }
             
             duration = (datetime.now() - start_time).total_seconds()
-            
             status = StageStatus.PASSED if risk_level == "LOW" else (StageStatus.WARNING if risk_level == "MEDIUM" else StageStatus.FAILED)
             
             return StageResult(
@@ -459,7 +438,6 @@ class ComplianceChecker:
             compliance_checks = []
             compliance_score = 100
             
-            # GDPR compliance
             privacy_result = next((r for r in stage_results if r.stage == WorkflowStage.PRIVACY), None)
             if privacy_result and privacy_result.score < 80:
                 compliance_checks.append({
@@ -475,7 +453,6 @@ class ComplianceChecker:
                     "details": "No obvious PII detected"
                 })
             
-            # AI Act compliance (EU)
             fairness_result = next((r for r in stage_results if r.stage == WorkflowStage.FAIRNESS), None)
             if fairness_result and fairness_result.score < 70:
                 compliance_checks.append({
@@ -491,7 +468,6 @@ class ComplianceChecker:
                     "details": "Data meets EU AI Act fairness requirements"
                 })
             
-            # Data governance
             quality_result = next((r for r in stage_results if r.stage == WorkflowStage.DATA_QUALITY), None)
             if quality_result and quality_result.score >= 80:
                 compliance_checks.append({
@@ -516,7 +492,6 @@ class ComplianceChecker:
             }
             
             duration = (datetime.now() - start_time).total_seconds()
-            
             status = StageStatus.PASSED if compliance_score >= 80 else StageStatus.WARNING
             
             return StageResult(
@@ -547,7 +522,6 @@ class AITrustScoreCalculator:
         start_time = datetime.now()
         
         try:
-            # Weighted scoring
             weights = {
                 WorkflowStage.DATA_QUALITY: 0.15,
                 WorkflowStage.FAIRNESS: 0.20,
@@ -562,7 +536,6 @@ class AITrustScoreCalculator:
                 if result.stage in weights:
                     total_score += result.score * weights[result.stage]
             
-            # Trust score classification
             if total_score >= 90:
                 trust_level = "🟢 EXCELLENT"
                 description = "Highly trustworthy AI system"
@@ -590,7 +563,6 @@ class AITrustScoreCalculator:
             }
             
             duration = (datetime.now() - start_time).total_seconds()
-            
             status = StageStatus.PASSED if total_score >= 70 else StageStatus.WARNING
             
             return StageResult(
@@ -624,7 +596,6 @@ class DeploymentDecisionEngine:
             trust_score_result = next((r for r in pipeline_results if r.stage == WorkflowStage.TRUST_SCORE), None)
             trust_score = trust_score_result.score if trust_score_result else 0
             
-            # Decision logic
             can_deploy = trust_score >= 75
             
             deployment_checklist = {
@@ -654,7 +625,6 @@ class DeploymentDecisionEngine:
             }
             
             duration = (datetime.now() - start_time).total_seconds()
-            
             status = StageStatus.PASSED if can_deploy else StageStatus.FAILED
             
             return StageResult(

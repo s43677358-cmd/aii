@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 import time
+from workflow_pipeline import WorkflowPipeline
 
 # Configure Streamlit
 st.set_page_config(
@@ -27,8 +28,6 @@ if 'pipeline_results' not in st.session_state:
     st.session_state.pipeline_results = None
 if 'uploaded_df' not in st.session_state:
     st.session_state.uploaded_df = None
-if 'current_stage' not in st.session_state:
-    st.session_state.current_stage = 0
 
 # ==================== Custom CSS ====================
 st.markdown("""
@@ -71,25 +70,12 @@ st.markdown("""
         font-weight: bold;
         font-size: 24px;
     }
-    .header-title {
-        font-size: 2.5em;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-bottom: 10px;
-    }
-    .workflow-diagram {
-        font-family: monospace;
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 8px;
-        white-space: pre;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==================== Header ====================
 st.markdown("""
-<div class="header-title">🛡️ AI Guardian OS - Unified Workflow Pipeline</div>
+<div style="font-size: 2.5em; font-weight: bold; color: #2c3e50; margin-bottom: 10px;">🛡️ AI Guardian OS - Unified Workflow Pipeline</div>
 <p style="font-size: 1.1em; color: #555;">End-to-End Responsible AI Assessment Platform</p>
 """, unsafe_allow_html=True)
 
@@ -107,13 +93,6 @@ with st.sidebar:
             st.metric("Can Deploy", "Yes ✅" if st.session_state.pipeline_results.can_deploy else "No ❌")
     else:
         st.info("⏳ Awaiting dataset upload")
-    
-    st.divider()
-    st.markdown("### Quick Actions")
-    if st.button("📋 View Report", key="view_report"):
-        st.session_state.show_report = True
-    if st.button("📥 Download Results", key="download_results"):
-        st.session_state.show_download = True
 
 # ==================== Main Content ====================
 # Workflow Diagram
@@ -178,8 +157,6 @@ if uploaded_file is not None:
                     df = pd.read_json(uploaded_file)
                 
                 st.session_state.uploaded_df = df
-                
-                # Display file info
                 file_info.metric("File Size", f"{file_size_mb:.2f} MB")
                 
                 st.success(f"✅ File loaded successfully: {uploaded_file.name}")
@@ -199,17 +176,9 @@ if uploaded_file is not None:
                 
                 # ==================== Execute Pipeline ====================
                 if st.button("▶️ Execute Full Pipeline", key="execute_pipeline", use_container_width=True):
-                    st.session_state.current_stage = 0
                     progress_bar = st.progress(0)
                     status_placeholder = st.empty()
                     results_container = st.container()
-                    
-                    # Import pipeline after file is loaded
-                    from workflow_pipeline import (
-                        WorkflowPipeline, DataQualityAnalyzer, FairnessAuditor,
-                        PrivacyScanner, ExplainabilityAnalyzer, RiskAssessor,
-                        ComplianceChecker, AITrustScoreCalculator, DeploymentDecisionEngine
-                    )
                     
                     pipeline = WorkflowPipeline()
                     stages = [
@@ -229,7 +198,7 @@ if uploaded_file is not None:
                         for idx, (stage_name, progress_val) in enumerate(stages):
                             status_placeholder.info(f"🔄 Processing: {stage_name}...")
                             progress_bar.progress(progress_val)
-                            time.sleep(0.5)  # Simulate processing
+                            time.sleep(0.3)
                         
                         # Execute pipeline
                         report = pipeline.execute(df)
@@ -272,7 +241,7 @@ if st.session_state.pipeline_executed and st.session_state.pipeline_results:
             score_class = "score-poor"
             emoji = "🔴"
         
-        st.markdown(f"<div class='{score_class}'>AI Trust Score\n{emoji} {trust_score:.1f}/100</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='{score_class}'>AI Trust Score<br>{emoji} {trust_score:.1f}/100</div>", unsafe_allow_html=True)
     
     with col2:
         deployment_status = "✅ APPROVED" if report.can_deploy else "❌ NOT APPROVED"
@@ -295,9 +264,6 @@ if st.session_state.pipeline_executed and st.session_state.pipeline_results:
     
     for tab_idx, (tab, result) in enumerate(zip(tabs, report.stages)):
         with tab:
-            # Status indicator
-            status_color = "green" if "Passed" in result.status.value else ("orange" if "Warning" in result.status.value else "red")
-            
             col1, col2, col3 = st.columns([2, 1, 1])
             
             with col1:
@@ -316,7 +282,6 @@ if st.session_state.pipeline_executed and st.session_state.pipeline_results:
             if result.details:
                 st.markdown("**Details:**")
                 
-                # Format details for display
                 for key, value in result.details.items():
                     if isinstance(value, (list, dict)):
                         st.json(value)
@@ -385,7 +350,6 @@ if st.session_state.pipeline_executed and st.session_state.pipeline_results:
         )
     
     with col2:
-        # Convert to CSV if dataframe exists
         if st.session_state.uploaded_df is not None:
             csv = st.session_state.uploaded_df.to_csv(index=False)
             st.download_button(
